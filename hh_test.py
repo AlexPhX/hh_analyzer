@@ -8,8 +8,8 @@ skills = Counter()
 urls = []
 vacs = []
 
-pages = 1
-params = {"text": "Java", "area": 2, "page": 0, "period": 7}
+pages = 5
+params = {"text": "Python", "area": 2, "page": 0, "period": 7}
 resp = requests.get("https://api.hh.ru/vacancies", params=params)
 if resp.status_code == requests.codes.ok:
     js_out = json.loads(resp.text)
