@@ -22,7 +22,7 @@ def get_info_from_hh(params, pages, out_type):
     :param out_type: Словарь вида {"urls": n1, "skills": n2, "vacs": n3}
                     В случае если n1, n2, n3 == 0 информация о ссылках,
                     навыках, вакансиях не будет включена в возвращаемый json.
-    :return: json вида
+    :return: словарь вида:
             {"request_info" : информация о запросе
              "skills" : набор уникальных навыков с частотами
              "urls" : список обработанных ссылок

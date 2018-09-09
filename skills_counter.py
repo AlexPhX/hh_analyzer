@@ -4,11 +4,13 @@ from collections import Counter
 from hh_loader import get_info_from_hh
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 langs = ("", "Java", "JavaScript",
          "Python", "C#",
          "C++", "PHP", "1С")
 
+os.makedirs("figures", exist_ok=True)
 for l in langs:
     par = {"text": "Программист " + l, "search_field": "name", "area": 2, "period": 30}
     o = {"skills": 0, "urls": 0, "vacs": 1}

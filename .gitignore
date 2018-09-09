@@ -3,3 +3,7 @@
 .*
 data
 __*__
+/data/*
+/figures/*
+kw.json
+
