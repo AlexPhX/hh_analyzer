@@ -1,0 +1,140 @@
+<meta charset="utf-8">
+<h2>Применение Python для анализа смежных востребованных навыков у разработчиков</h2>
+<img src="https://habrastorage.org/webt/be/2n/_n/be2n_nca4gvjnwafcwbc5nn-zwa.jpeg" />
+<h3>Введение</h3>
+<p align="justify">Сегодня в Сети можно найти огромное количество разнородной информации о материалов о наиболее востребованных языках программирования, библиотеках, фреймворках, операционных системах и прочих сущностях - назовём их технологиями. Число этих технологий постоянно растёт и становится ясно, что каждому, желающему пойти путём разработчика, необходимо фокусироваться на изучении некоторого наиболее востребованного стека, связанного с какой-либо ключевой технологией.</p>
+<p align="justify">Тут возникает первый вопрос - как можно определить востребованность той или иной технологии? На этот вопрос можно ответить, например, так: на технологию есть спрос, когда работодатели упоминают ее в качестве требования к соискателю при описании вакансии. Иными словами, если при просмотре 100 вакансий технология <b>A</b> была упомянута 60 раз, а технология <b>B</b> - 20 раз, можно считать технологию <b>А</b> более востребованной чем <b>B</b>.</p>
+<p align="justify">Второй вопрос состоит в том, что считать ключевыми технологиями?</p>
+<p align="justify">Исходя из большого интереса к статьям об анализе популярности языков программирования, будем считать ключевой технологией именно язык программирования.</p>
+<p align="justify">Таким образом, задачу можно сформулировать следующим образом – во множестве вакансий необходимо выделить подмножество, связанное с ключевой технологией, и в этом подмножестве подсчитать частоты упоминания прочих технологий.</p>
+<p align="justify">В качестве базы данных вакансий будем использовать портал <a href="https://hh.ru">hh.ru</a>, в силу его большой популярности и наличия <a href="https://github.com/hhru/api">HeadHunter API</a>. Язык программирования - Python 3.4.</p>
+<p align="justify">Чтобы сократить объем статьи, техническая сторона вопроса получения и обработки данных подробно рассматриваться не будет, но на некоторых ключевых моментах стоит остановиться. Исходный код проекта открыт и доступен на <a href="https://github.com/AlexPhX/hh_analyzer">GitHub</a>.</p>
+
+<h3>Получение перечня вакансий</h3>
+<p align="justify">Для получения перечня вакансий, относящихся к программистам Python, сделаем следующий get запрос при помощи библиотеки <a href="https://github.com/requests/requests">requests</a>:</p>
+<source lang="python">
+import requests
+import json
+l = "Python"
+params = {"text": "Программист " + l, "search_field": "name", "area": 2, "period": 30, "page": 0}
+r = requests.get("https://api.hh.ru/vacancies", params=params)
+jr = json.loads(r.text)</source>
+<p align="justify">В результате получим словарь со следующими элементами:</p>
+<ul>
+	<li>page:             class 'int'</li>
+	<li>clusters:         class 'NoneType'</li>
+	<li>per_page:         class 'int'</li>
+	<li>alternate_url:    class 'str'</li>
+	<li>found:            class 'int'</li>
+	<li>arguments:        class 'NoneType'</li>
+	<li>items:            class 'list'</li>
+	<li>pages:            class 'int'</li>
+</ul>
+<p align="justify">Нас интересует:</p>
+<ul>
+	<li>ключ pages, значение которого содержит количество страниц с вакансиями,</li>
+	<li>ключ items, указывающий на список с вакансиями на странице.</li>
+</ul>
+<p align="justify">Из каждого элемента списка <b>items</b>, который представляет собой словарь, нам понадобится ключ <b>url</b>. Значение по этому ключу является ссылкой на детальное описание вакансии. Последовательно изменяя параметр <b>page</b> можно перебрать все вакансии по запросу и создать список, необходимых для дальнейшего анализа ссылок. Для ускорения процесса загрузки информации о вакансиях используется несколько параллельных потоков из библиотеки <b>threading:</b></p>
+<source lang="python">
+from math import ceil
+import requests
+from threading import Thread
+import json
+
+class DownloadThread(Thread):
+   def __init__(self, urls, number, res):
+       Thread.__init__(self)
+       self.number = number
+       self.urls = urls
+       self.res = res
+
+   def run(self):
+       for url in self.urls:
+           resp = requests.get(url)
+           if resp.status_code == requests.codes.ok:
+               self.res.append(json.loads(requests.get(url).text))
+           else:
+               print("Status code: " + str(resp.status_code))
+               print(url)
+
+
+def start_dl_threads(urls, th_num, res):
+   threads = []
+   n = ceil(len(urls) / th_num)
+   for i in range(th_num):
+       t = DownloadThread(urls[i * n: (i + 1) * n], i, res)
+       threads.append(t)
+       t.start()
+   for t in threads:
+       t.join()
+</source>
+<p align="justify"> После построения зависимости скорости загрузки тестового набора из 274 вакансий от количества потоков загрузки было решено использовать 10 потоков, поскольку, в данном случае, большее их число практически не сокращает время работы скрипта.
+</p>
+<img src="https://habrastorage.org/webt/o6/pw/7t/o6pw7txxgotrvlsshvweusgk4n8.png" />
+<h2>Формирование словаря навыков и поиск навыков в описании вакансии</h2>
+<p align="justify">Изначально предполагалось создание словаря ключевых навыков вручную. Однако, после анализа структуры описания вакансии, стало ясно, что процесс можно во многом автоматизировать. Для этого нам понадобится доступный по ключу <b>key_skills</b> список, содержащий ключевые навыки данной вакансии. К сожалению, немногие вакансии содержат информацию о ключевых навыках. Кроме того, эта информация может расходиться с основным описанием. Поэтому, обработка только этих данных не дала бы полной картины.</p>
+<p align="justify">Были собраны все уникальные ключевые навыки по вакансиям имеющим в наименовании “Программист ” + ("Java", "JavaScript", "1С", "Python", "C", "C++", "C#", "Objective-C", "Perl", "Ruby", "PHP"), а использованы - первые 150 наиболее часто встречающихся.</p>
+<source lang="python">
+os.makedirs("data", exist_ok=True)
+langs = ("Java", "JavaScript",
+         "1С", "Python",
+         "C", "C++",
+         "C#", "Objective-C",
+         "Perl", "Ruby",
+         "PHP")
+
+par = {"text": "", "search_field": "name", "area": 2, "period": 30}
+o = {"skills": 1, "urls": 0, "vacs": 0}
+for l in langs:
+   par["text"] = "Программист " + l
+   with open("data\data_" + par["text"] + str(datetime.date.today())
+             + ".json", "w") as f:
+       json.dump(get_info_from_hh(par, 10, o), f, indent=4, ensure_ascii=False)
+
+data = Counter()
+for fn in os.listdir("data"):
+   if os.path.isfile("data/" + fn):
+       with open("data/" + fn, "r") as rf:
+           data += Counter(json.load(rf)["skills"])
+
+for item in data.most_common(150):
+   print(item)
+jsdict = {item[0]: item[0] for item in data.most_common(150)}
+with open("kw.json", "w") as wf:
+   json.dump(jsdict, wf, indent=4, ensure_ascii=False, sort_keys=True)
+</source>
+<p align="justify">Поиск ключевых слов в описаниях вакансий осуществлялся при помощи регулярного выражения вида:</p>
+<source lang="python">
+pattern = r"(?i)[^а-яА-Яa-zA-Z0-9_|^]%s[^а-яА-Яa-zA-Z0-9_|$]" % kw[item]
+</source>
+<p align="justify">Поскольку некоторые технологии являются обобщением нескольких более частных, при подсчете по ключу <b>sql</b>, например, использовалось значение вида:</p>
+<source lang="python">
+"sql": "sql|mysql|postgresql|ms sql"
+</source>
+<p align="justify">Также, для учёта различных названий, относящихся к одной и той же технологии использовались выражения вида:</p>
+<source lang="python">
+"шаблоны проектирования": "шаблон.+проектирования|паттерн.+проектирования|design patterns",
+"английский язык": "английск.+?|english",
+"машинное обучение": "машинн.+?обучен.+?|нейр.+?сет.+?|neural"
+</source>
+<p align="justify">Финальный файл ключевых слов можно найти в <a href="https://github.com/AlexPhX/hh_analyzer">GitHub репозитории</a>.
+</p>
+<p align="justify">При выборе ключевых технологий использовался список <a href="https://habr.com/company/hh/blog/418079/">топ-20 языков по количеству вакансий (упоминание в названии)</a>. При этом оставлены только те языки, которые совместно со словом “Программист” в названии дают более 20 вакансий в Санкт-Петербурге.</p>
+
+<h3>Результаты</h3>
+<p align="justify">Результат обработки такого абстрактного понятия как “программист” хорошо отражает общую картину вакансий отрасли. Во-первых видно, что каждый второй работодатель хочет получить от программиста знания <b>sql</b> и <b>английского языка</b>. Каждый третий работодатель хочет, чтобы программист владел системой контроля версий <b>git</b>. В силу ориентации разработки на web, востребованными технологиями являются <b>html</b> и <b>css</b>. Это особенно важно для языков <b>JavaScript</b> и <b>PHP</b>. Несколько неожиданно, но программисту, наверняка, придется <b>работать в команде</b>.</p>
+<p align="justify">Среди общих технологий, вошедших в двадцатку первых, есть <b>объектно ориентированное программирование</b>, <b>базы данных</b>, <b>алгоритмы и шаблоны проектирования</b>.</p>
+<p align="justify">В качестве операционной системы предпочтение стоит отдать <b>Linux</b>.</p>
+<p align="justify">При рассмотрении конкретных языков можно увидеть, что рядом с первой строкой располагается наиболее популярный фреймворк или библиотека. Для <b>Java</b> это <b>Spring</b> и <b>Hibernate</b>, для <b>C#</b> - <b>.net</b> и <b>asp.net</b>, <b>Python</b>-программисту наверняка будет нужен <b>Django</b>, а для <b>JavaScript</b> понадобится <b>React</b>.
+<p align="justify">Особенным и самым нетребовательным является отечественный комплекс <b>1С</b>. Многим работодателям будет достаточно знания только этой платформы (не имею ни малейшего понятия много это или мало). Полезными навыками станут: <b>работа в команде</b>, понимание процессов <b>тестирования</b> и умение работать с <b>базами данных</b>.</p>
+<p align="justify">В силу особенностей работы поискового движка hh по запросу “Программист C” было выдано множество результатов с технологией 1С. Поэтому результаты по этому языку получились некорректными.</p>
+<p align="justify">Полученные результаты по Санкт-Петербургу, привожу ниже.</p>
+<img src="https://habrastorage.org/webt/jy/kg/l2/jykgl27com5cqwkohoxwk-ayijs.png" />
+<img src="https://habrastorage.org/webt/gi/ex/8v/giex8v1dtlwzo05jt_rpkveijko.png" />
+<img src="https://habrastorage.org/webt/nb/ub/ab/nbubabu2plxw5kjpre5h2mrziyq.png" />
+<img src="https://habrastorage.org/webt/ss/7f/j9/ss7fj9s6zitustfflop4-8fg0uc.png" />
+<img src="https://habrastorage.org/webt/hp/kr/di/hpkrdiqupv9kmarcirt_-t2jydk.png" />
+<img src="https://habrastorage.org/webt/yj/op/da/yjopdavwfv-cvrchg-s8c-3kz-e.png" />
+<img src="https://habrastorage.org/webt/jz/45/wl/jz45wlnq3t5cjrn4gbzfhcezjgo.png" />
+<img src="https://habrastorage.org/webt/ak/ap/ft/akapftghpcsnufmerzyk4ioceco.png" />
