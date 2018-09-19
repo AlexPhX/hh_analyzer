@@ -37,13 +37,19 @@ class DownloadThread(Thread):
 
 
 def start_dl_threads(urls, th_num, res):
+    """
+    Функция для многопоточного скачивания данных
+
+    :param urls: Список url для скачивания
+    :param th_num: Число потоков
+    :param res: Список результатов
+    """
     threads = []
     n = ceil(len(urls) / th_num)
     for i in range(th_num):
         t = DownloadThread(urls[i * n: (i + 1) * n], i, res)
         threads.append(t)
         t.start()
-    start_t = time.time()
     for t in threads:
         t.join()
 

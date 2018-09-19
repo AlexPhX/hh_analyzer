@@ -1,16 +1,26 @@
+"""
+Основной скрипт.
+
+Сохраняет диаграммы результаты в текстовом виде и в папку figures/
+"""
+
 import re
 import json
+import csv
 from collections import Counter
 from hh_loader import get_info_from_hh
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-langs = ("", "Java", "JavaScript",
-         "Python", "C#",
-         "C++", "PHP", "1С")
+# https://habr.com/company/hh/blog/418079/
+# топ 10 языков по количеству вакансий в СПб
+langs = ("", "1С", "PHP", "Java",
+         "C#", "JavaScript", "C++",
+         "Python", "C", "Ruby")
 
 os.makedirs("figures", exist_ok=True)
+result = {}
 for l in langs:
     par = {"text": "Программист " + l, "search_field": "name", "area": 2, "period": 30}
     o = {"skills": 0, "urls": 0, "vacs": 1}
@@ -39,8 +49,6 @@ for l in langs:
     skill = [i[0] for i in data.most_common(20)]
     y_pos = np.arange(len(skill))
     frequency = [data[s] for s in skill]
-    error = np.random.rand(len(skill))
-
     ax.barh(y_pos, frequency, align='center', color='blue')
     ax.set_yticks(y_pos)
     ax.set_yticklabels(skill)
@@ -50,3 +58,11 @@ for l in langs:
 
     plt.tight_layout()
     plt.savefig("figures/" + par["text"] + ".png")
+    result[l] = [[s, data[s]] for s in skill]
+with open("figures/result.txt", "w") as wf:
+     writer = csv.writer(wf)
+     cnt = 1
+     writer.writerow(result)
+     for i in range(20):
+        line = [result[x][i] for x in result]
+        writer.writerow(y for x in line for y in x)

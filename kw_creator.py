@@ -1,3 +1,8 @@
+"""
+Модуль для создания файла ключевых слов kw.json.
+
+"""
+
 import json
 import datetime
 import os
@@ -5,7 +10,9 @@ from collections import Counter
 from hh_loader import get_info_from_hh
 
 # Если установить ключ from_file=True будет произведена
-# обработка данных из каталога data
+# обработка данных из каталога data,
+# иначе будет произведена загрузка данных с hh.ru в каталог data/
+
 from_file = False
 if not(from_file):
     os.makedirs("data", exist_ok=True)
